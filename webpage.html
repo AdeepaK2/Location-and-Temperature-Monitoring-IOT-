@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Safe Carry Plus</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table th,
+        table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        table th {
+            background-color: #f2f2f2;
+        }
+
+        .footer {
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            padding: 10px;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .warning {
+            color: red;
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2 id="warningMessage" class="warning" style="display: none;">Temperature exceeds safe limit!</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Date/Time</th>
+            <th>Temperature</th>
+            <th>Humidity</th>
+            <th>Google Maps</th>
+        </tr>
+        </thead>
+        <tbody id="dataBody"></tbody>
+    </table>
+</div>
+
+<script>
+    // User-defined temperature limit
+    const temperatureLimit = parseFloat(prompt("Please enter your preferred temperature limit:"));
+
+    function fetchDataAndUpdate() {
+        // Fetch data from ThingSpeak
+        fetch('https://api.thingspeak.com/channels/2503888/feeds.json?api_key=U77JZBQJ80V6Y4G1&results=1')
+            .then(response => response.json())
+            .then(data => {
+                const feeds = data.feeds;
+                const tableBody = document.getElementById('dataBody');
+                const warningMessage = document.getElementById('warningMessage');
+
+                feeds.forEach(feed => {
+                    const row = document.createElement('tr');
+                    const dateTimeCell = document.createElement('td');
+                    const temperatureCell = document.createElement('td');
+                    const humidityCell = document.createElement('td');
+                    const googleMapsCell = document.createElement('td');
+
+                    const dateTime = new Date(feed.created_at).toLocaleString();
+                    const temperature = parseFloat(feed.field3);
+
+                    dateTimeCell.textContent = dateTime;
+                    temperatureCell.textContent = temperature;
+                    humidityCell.textContent = feed.field4;
+
+                    const googleMapsLink = document.createElement('a');
+                    googleMapsLink.textContent = 'View on Google Maps';
+                    googleMapsLink.href = `https://www.google.com/maps?q=${feed.field1},${feed.field2}`;
+                    googleMapsLink.target = '_blank';
+
+                    googleMapsCell.appendChild(googleMapsLink);
+
+                    row.appendChild(dateTimeCell);
+                    row.appendChild(temperatureCell);
+                    row.appendChild(humidityCell);
+                    row.appendChild(googleMapsCell);
+
+                    tableBody.appendChild(row);
+
+                    
+                    if (temperature > temperatureLimit) {
+                        warningMessage.style.display = 'block';
+                    } else {
+                        warningMessage.style.display = 'none';
+                    }
+                });
+            })
+            .catch(error => console.error('Error fetching data:', error));
+    }
+
+    fetchDataAndUpdate();
+    setInterval(fetchDataAndUpdate, 30000);
+</script>
+</body>
+</html>
+
+
