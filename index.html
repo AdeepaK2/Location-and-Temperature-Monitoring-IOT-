@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Safe Carry Plus</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 20px auto;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            text-align: center;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .container:hover {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .warning {
+            color: red;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .data {
+            font-size: 1.1em;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+
+        .data p {
+            margin: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            flex: 1 1 calc(50% - 20px);
+            min-width: 120px;
+        }
+
+        .data p span {
+            font-weight: bold;
+        }
+
+        .header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 10px;
+            }
+
+            .data {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .data p {
+                width: 100%;
+                margin-bottom: 10px;
+                font-size: 1.5em;  /* Increased font size */
+            }
+
+            #map {
+                height: 600px;  /* Increased height for the map */
+            }
+
+            .header {
+                font-size: 2em;  /* Increased font size */
+            }
+
+            .warning {
+                font-size: 1.5em;  /* Increased font size */
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>Safe Carry Plus</h1>
+</div>
+<div class="container">
+    <h2 id="warningMessage" class="warning" style="display: none;"></h2>
+    <div id="map"></div>
+    <div class="data">
+        <p>Temperature: <span id="temperature">N/A</span> °C</p>
+        <p>Humidity: <span id="humidity">N/A</span> %</p>
+    </div>
+</div>
+
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDsrPhZb9BmNGYmo6U4gt3xNc7sb0rg2Xk"></script>
+<script>
+    // User-defined temperature limit
+    const temperatureLimit = parseFloat(prompt("Please enter your preferred temperature limit:"));
+
+    let map;
+    let marker;
+
+    function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+            center: {lat: -34.397, lng: 150.644},
+            zoom: 8
+        });
+
+        marker = new google.maps.Marker({
+            map: map
+        });
+
+        fetchDataAndUpdate();
+        setInterval(fetchDataAndUpdate, 10000);
+    }
+
+    function fetchDataAndUpdate() {
+        // Fetch multiple data points from ThingSpeak
+        fetch('https://api.thingspeak.com/channels/2503888/feeds.json?api_key=U77JZBQJ80V6Y4G1&results=10')
+            .then(response => response.json())
+            .then(data => {
+                const feeds = data.feeds;
+                const warningMessage = document.getElementById('warningMessage');
+                const temperatureElement = document.getElementById('temperature');
+                const humidityElement = document.getElementById('humidity');
+
+                let lastValidLocation = null;
+
+                // Find the most recent valid location
+                for (let i = feeds.length - 1; i >= 0; i--) {
+                    const feed = feeds[i];
+                    const latitude = parseFloat(feed.field1);
+                    const longitude = parseFloat(feed.field2);
+
+                    if (latitude !== 0 || longitude !== 0) {
+                        lastValidLocation = { lat: latitude, lng: longitude };
+                        break;
+                    }
+                }
+
+                // Check the latest feed
+                const latestFeed = feeds[0];
+                const latestLatitude = parseFloat(latestFeed.field1);
+                const latestLongitude = parseFloat(latestFeed.field2);
+
+                if (latestLatitude === 0 && latestLongitude === 0 && lastValidLocation) {
+                    document.getElementById('warningMessage').textContent = 'Location fetching unsuccessful. Device might be turned off. Displaying the last seen location.';
+                    document.getElementById('warningMessage').style.display = 'block';
+                    marker.setPosition(lastValidLocation);
+                    map.setCenter(lastValidLocation);
+                } else if (lastValidLocation) {
+                    marker.setPosition(lastValidLocation);
+                    map.setCenter(lastValidLocation);
+                    document.getElementById('warningMessage').style.display = 'none';
+                }
+
+                // Update temperature and humidity
+                const temperature = parseFloat(latestFeed.field3);
+                const humidity = parseFloat(latestFeed.field4);
+
+                temperatureElement.textContent = temperature.toFixed(1);
+                humidityElement.textContent = humidity.toFixed(1);
+
+                if (temperature > temperatureLimit) {
+                    warningMessage.style.display = 'block';
+                    warningMessage.textContent = 'Temperature exceeds safe limit!';
+                } else if (latestLatitude !== 0 || latestLongitude !== 0) {
+                    warningMessage.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching data:', error);
+                document.getElementById('warningMessage').textContent = 'Error fetching data. Please try again later.';
+                document.getElementById('warningMessage').style.display = 'block';
+            });
+    }
+
+    // Initialize the map
+    google.maps.event.addDomListener(window, 'load', initMap);
+</script>
+</body>
+</html>
+
+
+
